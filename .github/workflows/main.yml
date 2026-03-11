@@ -6,10 +6,10 @@ on:
       run_count:
         description: '请输入本次需要注册的账号数量'
         required: true
-        default: '2'
+        default: '5'
         type: string
-  # schedule:
-  #   - cron: '0 0 * * *'  # 注释掉这两行后，就不会每天自动运行了
+  schedule:
+    - cron: '0 0 * * 0'  # 0代表星期日。如果你想改在星期一，就写 '0 0 * * 1'
 
 jobs:
   run-registration:
