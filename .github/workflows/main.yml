@@ -48,6 +48,39 @@ jobs:
           else
             python openai_register.py --count "$COUNT"
           fi
+          
+      - name: Upload to API and Cleanup
+        env:
+          API_URL: ${{ secrets.UPLOAD_API_URL }}
+          API_KEY: ${{ secrets.MANAGEMENT_KEY }}
+        run: |
+          # 1. 判断是否配置了这两个变量
+          if [ -z "$API_URL" ] || [ -z "$API_KEY" ]; then
+            echo "未配置上传 API 或密钥 (或为空)，跳过上传步骤。"
+            exit 0
+          fi
+          
+          # 2. 检查 Json 文件夹是否存在且有 json 文件
+          if [ -d "Json" ] && ls Json/*.json 1> /dev/null 2>&1; then
+            for file in Json/*.json; do
+              echo "正在上传: $file"
+              
+              # 执行 curl 并提取 HTTP 状态码，同时把接口响应存入 response.log
+              STATUS_CODE=$(curl -s -w "%{http_code}" -o response.log -X POST -F "file=@$file" -H "Authorization: Bearer $API_KEY" "$API_URL")
+              
+              # 3. 如果状态码是 200 或 201，认为上传成功，删除文件
+              if [ "$STATUS_CODE" -eq 200 ] || [ "$STATUS_CODE" -eq 201 ]; then
+                echo "✅ 上传成功！删除本地文件: $file"
+                rm "$file"
+              else
+                echo "❌ 上传失败！HTTP 状态码: $STATUS_CODE"
+                echo "API 返回内容:"
+                cat response.log
+              fi
+            done
+          else
+            echo "没有找到需要上传的 JSON 文件。"
+          fi
 
       - name: Commit and Push generated JSON files
         run: |
