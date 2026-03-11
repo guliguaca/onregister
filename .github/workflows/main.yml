@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # 授予 GitHub Actions 推送代码的权限
+    env: # 新增这下面两行，强制启用 Node.js 24 来消除警告
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
