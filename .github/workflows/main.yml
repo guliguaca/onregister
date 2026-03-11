@@ -1,9 +1,15 @@
 name: Auto OpenAI Registration
 
 on:
-  workflow_dispatch: # 允许你在 GitHub 网页端手动点击运行
-  schedule:
-    - cron: '0 0 * * *' # 每天 UTC 时间 00:00 自动运行一次（可根据需要修改）
+  workflow_dispatch:
+    inputs:
+      run_count:
+        description: '请输入本次需要注册的账号数量'
+        required: true
+        default: '2'
+        type: string
+  # schedule:
+  #   - cron: '0 0 * * *'  # 注释掉这两行后，就不会每天自动运行了
 
 jobs:
   run-registration:
@@ -26,8 +32,20 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Registration Script
-        # 使用 --once 参数确保在 GitHub Actions 环境中只运行一次，防止死循环耗尽配额
-        run: python openai_register.py --once
+        env:
+          # 从 GitHub Secrets 中读取刚才保存的 PROXY_URL
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        # 如果 PROXY_URL 存在，则加上 --proxy 参数；否则按无代理运行
+        run: |
+          # 如果是手动触发，取输入的值；如果是定时任务触发，则默认跑 5 次
+          COUNT="${{ github.event.inputs.run_count || '5' }}"
+          echo "准备循环运行 $COUNT 次注册流程..."
+          if [ -n "$PROXY_URL" ]; then
+            # 传入 --count 参数
+            python openai_register.py --count "$COUNT" --proxy "$PROXY_URL"
+          else
+            python openai_register.py --count "$COUNT"
+          fi
 
       - name: Commit and Push generated JSON files
         run: |
