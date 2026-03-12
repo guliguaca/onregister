@@ -24,8 +24,8 @@ from curl_cffi import requests
 
 #新邮箱服务配置（请按需修改）
 #==========================================
-MAILTM_BASE = "https://chat-tempmail.com/"  # 🔴 请替换为新邮箱服务的实际地址
-MAILTM_KEY = "mk_jRJfhEJGHKzKCHJzshqkP_zExOO0L08J"  # 🔴 请在此填写你的 X-API-Key，或通过命令行 --mailtm-key 传入
+MAILTM_BASE = "https://mail.eleme.uk"  # 🔴 请替换为新邮箱服务的实际地址
+MAILTM_KEY = "mk_16hhA0ySiRi_gtr7m37WOTWc-BOHxK-S"  # 🔴 请在此填写你的 X-API-Key，或通过命令行 --mailtm-key 传入
 
 #==========================================
 #新邮箱服务 API 封装
@@ -59,7 +59,8 @@ def get_email_and_token(proxies: Any = None) -> tuple:
     返回: (email: str, email_id: str)  # 注意：第二个返回值现在是 email_id，不再是 token
     """
     try:
-        domains = _mailtm_domains(proxies)
+        # domains = _mailtm_domains(proxies)
+        domains = ["eleme.uk","ele.edu.kg"]  # 🔴 如果你只想使用特定域名，可以直接指定列表
         if not domains:
             print("[Error] 没有可用域名")
             return "", ""
@@ -447,10 +448,10 @@ def run(proxy: Optional[str]) -> Optional[str]:
         print(f"[Error] 网络连接检查失败: {e}")
         return None
 
-    # email, dev_token = get_email_and_token(proxies)
-    # if not email or not dev_token:
-    #     return None
-    # print(f"[*] 成功获取 Mail.tm 邮箱与授权: {email}")
+    email, dev_token = get_email_and_token(proxies)
+    if not email or not dev_token:
+        return None
+    print(f"[*] 成功获取 Mail.tm 邮箱与授权: {email}")
     email, email_id = get_email_and_token(proxies)
     if not email or not email_id:
         return None
