@@ -22,115 +22,95 @@ import urllib.error
 
 from curl_cffi import requests
 
-# ==========================================
-# Mail.tm 临时邮箱 API
-# ==========================================
+#新邮箱服务配置（请按需修改）
+#==========================================
+MAILTM_BASE = "https://chat-tempmail.com/"  # 🔴 请替换为新邮箱服务的实际地址
+MAILTM_KEY = "mk_jRJfhEJGHKzKCHJzshqkP_zExOO0L08J"  # 🔴 请在此填写你的 X-API-Key，或通过命令行 --mailtm-key 传入
 
-MAILTM_BASE = "https://api.mail.tm"
-
-
-def _mailtm_headers(*, token: str = "", use_json: bool = False) -> Dict[str, Any]:
-    headers = {"Accept": "application/json"}
-    if use_json:
-        headers["Content-Type"] = "application/json"
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
-
+#==========================================
+#新邮箱服务 API 封装
+#==========================================
+def _mailtm_headers() -> Dict[str, Any]:
+    """统一请求头，使用 X-API-Key 认证"""
+    return {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-API-Key": MAILTM_KEY,
+    }
 
 def _mailtm_domains(proxies: Any = None) -> List[str]:
+    """获取可用邮箱域名列表"""
     resp = requests.get(
-        f"{MAILTM_BASE}/domains",
+        f"{MAILTM_BASE}/api/email/domains",
         headers=_mailtm_headers(),
         proxies=proxies,
         impersonate="chrome",
         timeout=15,
     )
     if resp.status_code != 200:
-        raise RuntimeError(f"获取 Mail.tm 域名失败，状态码: {resp.status_code}")
-
+        raise RuntimeError(f"获取邮箱域名失败，状态码: {resp.status_code}")
     data = resp.json()
-    domains = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        items = data.get("hydra:member") or data.get("items") or []
-    else:
-        items = []
-
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        domain = str(item.get("domain") or "").strip()
-        is_active = item.get("isActive", True)
-        is_private = item.get("isPrivate", False)
-        if domain and is_active and not is_private:
-            domains.append(domain)
-
-    return domains
-
+    domains = data.get("domains") or []
+    return [str(d).strip() for d in domains if d]
 
 def get_email_and_token(proxies: Any = None) -> tuple:
-    """创建 Mail.tm 邮箱并获取 Bearer Token"""
+    """
+    创建新邮箱
+    返回: (email: str, email_id: str)  # 注意：第二个返回值现在是 email_id，不再是 token
+    """
     try:
         domains = _mailtm_domains(proxies)
         if not domains:
-            print("[Error] Mail.tm 没有可用域名")
+            print("[Error] 没有可用域名")
             return "", ""
+        
         domain = random.choice(domains)
-
-        for _ in range(5):
-            local = f"oc{secrets.token_hex(5)}"
-            email = f"{local}@{domain}"
-            password = secrets.token_urlsafe(18)
-
-            create_resp = requests.post(
-                f"{MAILTM_BASE}/accounts",
-                headers=_mailtm_headers(use_json=True),
-                json={"address": email, "password": password},
-                proxies=proxies,
-                impersonate="chrome",
-                timeout=15,
-            )
-
-            if create_resp.status_code not in (200, 201):
-                continue
-
-            token_resp = requests.post(
-                f"{MAILTM_BASE}/token",
-                headers=_mailtm_headers(use_json=True),
-                json={"address": email, "password": password},
-                proxies=proxies,
-                impersonate="chrome",
-                timeout=15,
-            )
-
-            if token_resp.status_code == 200:
-                token = str(token_resp.json().get("token") or "").strip()
-                if token:
-                    return email, token
-
-        print("[Error] Mail.tm 邮箱创建成功但获取 Token 失败")
-        return "", ""
+        name = f"oc{secrets.token_hex(5)}"  # 保持原有命名风格
+        
+        create_resp = requests.post(
+            f"{MAILTM_BASE}/api/emails/generate",
+            headers=_mailtm_headers(),
+            json={"name": name, "expiryTime": 86400000, "domain": domain},
+            proxies=proxies,
+            impersonate="chrome",
+            timeout=15,
+        )
+        
+        if create_resp.status_code not in (200, 201):
+            print(f"[Error] 邮箱创建失败，状态码: {create_resp.status_code}")
+            print(create_resp.text)
+            return "", ""
+        
+        data = create_resp.json()
+        email = str(data.get("email") or "").strip()
+        email_id = str(data.get("id") or "").strip()
+        
+        if not email or not email_id:
+            print("[Error] 邮箱创建响应缺少 email 或 id 字段")
+            return "", ""
+        
+        return email, email_id  # 🔴 注意：返回的是 (email, email_id)
+        
     except Exception as e:
-        print(f"[Error] 请求 Mail.tm API 出错: {e}")
+        print(f"[Error] 请求邮箱API出错: {e}")
         return "", ""
 
-
-def get_oai_code(token: str, email: str, proxies: Any = None) -> str:
-    """使用 Mail.tm Token 轮询获取 OpenAI 验证码"""
-    url_list = f"{MAILTM_BASE}/messages"
+def get_oai_code(email_id: str, email: str, proxies: Any = None) -> str:
+    """
+    轮询获取邮件并提取 OpenAI 验证码
+    参数: email_id - 邮箱的唯一ID（用于查邮件）, email - 邮箱地址（仅用于日志）
+    """
+    list_url = f"{MAILTM_BASE}/api/emails/{email_id}"
     regex = r"(?<!\d)(\d{6})(?!\d)"
     seen_ids: set[str] = set()
-
-    print(f"[*] 正在等待邮箱 {email} 的验证码...", end="", flush=True)
+    print(f"[*] 正在等待邮箱 {email} 的验证码... ", end="", flush=True)
 
     for _ in range(40):
-        print(".", end="", flush=True)
+        print(". ", end="", flush=True)
         try:
             resp = requests.get(
-                url_list,
-                headers=_mailtm_headers(token=token),
+                list_url,
+                headers=_mailtm_headers(),
                 proxies=proxies,
                 impersonate="chrome",
                 timeout=15,
@@ -140,12 +120,7 @@ def get_oai_code(token: str, email: str, proxies: Any = None) -> str:
                 continue
 
             data = resp.json()
-            if isinstance(data, list):
-                messages = data
-            elif isinstance(data, dict):
-                messages = data.get("hydra:member") or data.get("messages") or []
-            else:
-                messages = []
+            messages = data.get("messages") or []
 
             for msg in messages:
                 if not isinstance(msg, dict):
@@ -155,9 +130,10 @@ def get_oai_code(token: str, email: str, proxies: Any = None) -> str:
                     continue
                 seen_ids.add(msg_id)
 
+                # 获取邮件详情（新接口路径）
                 read_resp = requests.get(
-                    f"{MAILTM_BASE}/messages/{msg_id}",
-                    headers=_mailtm_headers(token=token),
+                    f"{MAILTM_BASE}/api/emails/{email_id}/{msg_id}",
+                    headers=_mailtm_headers(),
                     proxies=proxies,
                     impersonate="chrome",
                     timeout=15,
@@ -166,23 +142,23 @@ def get_oai_code(token: str, email: str, proxies: Any = None) -> str:
                     continue
 
                 mail_data = read_resp.json()
-                sender = str(
-                    ((mail_data.get("from") or {}).get("address") or "")
-                ).lower()
-                subject = str(mail_data.get("subject") or "")
-                intro = str(mail_data.get("intro") or "")
-                text = str(mail_data.get("text") or "")
-                html = mail_data.get("html") or ""
-                if isinstance(html, list):
-                    html = "\n".join(str(x) for x in html)
-                content = "\n".join([subject, intro, text, str(html)])
+                message = mail_data.get("message") or {}
+                
+                # 🔴 字段名变化：from→from_address, text→content
+                sender = str(message.get("from_address") or "").lower()
+                subject = str(message.get("subject") or "")
+                content = str(message.get("content") or "")
+                html = str(message.get("html") or "")
+                
+                full_content = "\n".join([subject, content, html])
 
-                if "openai" not in sender and "openai" not in content.lower():
+                # 过滤非 OpenAI 邮件
+                if "openai" not in sender and "openai" not in full_content.lower():
                     continue
 
-                m = re.search(regex, content)
+                m = re.search(regex, full_content)
                 if m:
-                    print(" 抓到啦! 验证码:", m.group(1))
+                    print(" 抓到啦! 验证码: ", m.group(1))
                     return m.group(1)
         except Exception:
             pass
@@ -192,6 +168,35 @@ def get_oai_code(token: str, email: str, proxies: Any = None) -> str:
     print(" 超时，未收到验证码")
     return ""
 
+# ==========================================
+# 邮箱清理函数（新增）
+# ==========================================
+def _mailtm_delete_email(email_id: str, proxies: Any = None) -> bool:
+    """
+    删除指定邮箱（调用后该邮箱及所有邮件将不可恢复）
+    返回: bool - 是否删除成功（含"已不存在"的情况）
+    """
+    if not email_id:
+        return False
+    try:
+        resp = requests.delete(
+            f"{MAILTM_BASE}/api/emails/{email_id}",
+            headers=_mailtm_headers(),  # 自动携带 X-API-Key
+            proxies=proxies,
+            impersonate="chrome",
+            timeout=10,
+        )
+        # 204=No Content(删除成功), 200=OK, 404=邮箱已不存在（也视为"清理完成"）
+        if resp.status_code in (200, 204, 404):
+            print(f"[*] 临时邮箱已清理: {email_id}")
+            return True
+        else:
+            print(f"[Warn] 删除邮箱失败，状态码: {resp.status_code}")
+            return False
+    except Exception as e:
+        # 🔴 关键：删除失败不影响主流程，仅记录日志
+        print(f"[Warn] 删除邮箱时异常: {e}")
+        return False
 
 # ==========================================
 # OAuth 授权与辅助函数
@@ -442,10 +447,15 @@ def run(proxy: Optional[str]) -> Optional[str]:
         print(f"[Error] 网络连接检查失败: {e}")
         return None
 
-    email, dev_token = get_email_and_token(proxies)
-    if not email or not dev_token:
+    # email, dev_token = get_email_and_token(proxies)
+    # if not email or not dev_token:
+    #     return None
+    # print(f"[*] 成功获取 Mail.tm 邮箱与授权: {email}")
+    email, email_id = get_email_and_token(proxies)
+    if not email or not email_id:
         return None
-    print(f"[*] 成功获取 Mail.tm 邮箱与授权: {email}")
+    print(f"[*] 成功获取邮箱: {email} (ID: {email_id})")
+
 
     oauth = generate_oauth_url()
     url = oauth.auth_url
@@ -500,7 +510,8 @@ def run(proxy: Optional[str]) -> Optional[str]:
         )
         print(f"[*] 验证码发送状态: {otp_resp.status_code}")
 
-        code = get_oai_code(dev_token, email, proxies)
+        # code = get_oai_code(dev_token, email, proxies)
+        code = get_oai_code(email_id, email, proxies)  # 🔴 注意：现在传入 email_id 来获取验证码
         if not code:
             return None
 
@@ -580,6 +591,18 @@ def run(proxy: Optional[str]) -> Optional[str]:
 
             next_url = urllib.parse.urljoin(current_url, location)
             if "code=" in next_url and "state=" in next_url:
+                # return submit_callback_url(
+                #     callback_url=next_url,
+                #     code_verifier=oauth.code_verifier,
+                #     redirect_uri=oauth.redirect_uri,
+                #     expected_state=oauth.state,
+                # )
+                if email_id:
+                    try:
+                        _mailtm_delete_email(email_id, proxies)
+                    except Exception:
+                        pass  # 静默失败，确保主流程不受影响
+
                 return submit_callback_url(
                     callback_url=next_url,
                     code_verifier=oauth.code_verifier,
