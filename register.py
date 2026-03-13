@@ -660,9 +660,12 @@ def main() -> None:
                     #原始代码
                     # acc_dir = OUT_DIR / "Json"
                     #修改代码
-                    acc_dir =file_path
+                    # acc_dir =file_path
+                    #原始代码
                     # acc_dir.mkdir(parents=True, exist_ok=True)
-                    acc_file = acc_dir / "accounts.txt"
+                    # acc_file = acc_dir / "accounts.txt"
+                    # 修改代码
+                    acc_file = os.path.join("Json", "accounts.txt")
                     #原始代码
                     # acc_file.write_text("", encoding="utf-8", errors="ignore") if not acc_file.exists() else None
                     #修改代码
@@ -672,7 +675,7 @@ def main() -> None:
                 except Exception:
                     pass
                 try:
-                    with open(acc_dir / "accounts.txt", "a", encoding="utf-8") as f:
+                    with open(os.path.join("Json", "accounts.txt"), "a", encoding="utf-8") as f:
                         f.write(f"{email}----{password}\n")
                 except Exception as e:
                     print(f"[Error] 保存账号信息失败: {e}")
