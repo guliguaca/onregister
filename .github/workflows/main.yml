@@ -38,6 +38,8 @@ jobs:
           # 从 GitHub Secrets 中读取刚才保存的 PROXY_URL
           PROXY_URL: ${{ secrets.PROXY_URL }}
         # 如果 PROXY_URL 存在，则加上 --proxy 参数；否则按无代理运行
+        #读取临时邮箱密钥
+          GPTMAIL_API_KEY: ${{ secrets.GPTMAIL_API_KEY }}
         run: |
           # 如果是手动触发，取输入的值；如果是定时任务触发，则默认跑 5 次
           COUNT="${{ github.event.inputs.run_count || '5' }}"
