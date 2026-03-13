@@ -646,7 +646,12 @@ def main() -> None:
                 file_name = f"token_{fname_email}_{int(time.time())}.json"
                 file_path = os.path.join("Json", file_name)
                 try:
-                    file_path.write_text(token_json, encoding="utf-8")
+                    #原始代码
+                    # file_path.write_text(token_json, encoding="utf-8")
+                    #修改代码
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(token_json)
+
                     print(f"[*] 成功! Token 已保存至: {file_path}")
                 except Exception as e:
                     print(f"[Error] 保存 token 失败: {e}")
@@ -656,9 +661,14 @@ def main() -> None:
                     # acc_dir = OUT_DIR / "Json"
                     #修改代码
                     acc_dir =file_path
-                    acc_dir.mkdir(parents=True, exist_ok=True)
+                    # acc_dir.mkdir(parents=True, exist_ok=True)
                     acc_file = acc_dir / "accounts.txt"
-                    acc_file.write_text("", encoding="utf-8", errors="ignore") if not acc_file.exists() else None
+                    #原始代码
+                    # acc_file.write_text("", encoding="utf-8", errors="ignore") if not acc_file.exists() else None
+                    #修改代码
+                    if not os.path.exists(acc_file):
+                        with open(acc_file, 'w', encoding='utf-8') as f:
+                            f.write("")
                 except Exception:
                     pass
                 try:
