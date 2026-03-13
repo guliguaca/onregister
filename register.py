@@ -617,7 +617,7 @@ def main() -> None:
 
     count = 0
     print("[Info] MasterAlanLab OpenAI Registrar Started")
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     while True:
         count += 1
@@ -632,12 +632,19 @@ def main() -> None:
                 except Exception:
                     fname_email = "unknown"
 
-                tokens_dir = OUT_DIR / "Json"
+                # tokens_dir = OUT_DIR / "Json"
                 try:
-                    tokens_dir.mkdir(parents=True, exist_ok=True)
+                    #原始代码
+                    # tokens_dir.mkdir(parents=True, exist_ok=True)
+                    #修改代码
+                    os.makedirs("Json", exist_ok=True) # 确保 Json 文件夹存在
                 except Exception:
                     pass
-                file_path = tokens_dir / f"token_{fname_email}_{int(time.time())}.json"
+                #原始代码
+                # file_path = tokens_dir / f"token_{fname_email}_{int(time.time())}.json"
+                #修改代码
+                file_name = f"token_{fname_email}_{int(time.time())}.json"
+                file_path = os.path.join("Json", file_name)
                 try:
                     file_path.write_text(token_json, encoding="utf-8")
                     print(f"[*] 成功! Token 已保存至: {file_path}")
@@ -645,7 +652,10 @@ def main() -> None:
                     print(f"[Error] 保存 token 失败: {e}")
 
                 try:
-                    acc_dir = OUT_DIR / "Json"
+                    #原始代码
+                    # acc_dir = OUT_DIR / "Json"
+                    #修改代码
+                    acc_dir =file_path
                     acc_dir.mkdir(parents=True, exist_ok=True)
                     acc_file = acc_dir / "accounts.txt"
                     acc_file.write_text("", encoding="utf-8", errors="ignore") if not acc_file.exists() else None
@@ -661,7 +671,13 @@ def main() -> None:
         except Exception as e:
             print(f"[Error] 发生未捕获异常: {e}")
 
-        if args.once:
+        # 原始代码
+        # if args.once:
+        #     break
+
+        # 替换为：
+        if args.count > 0 and count >= args.count:
+            print(f"[*] 已达到设定的执行次数 ({args.count})，任务结束。")
             break
         wait_time = random.randint(sleep_min, sleep_max)
         print(f"[*] 休息 {wait_time} 秒...")
