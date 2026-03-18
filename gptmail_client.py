@@ -1,5 +1,5 @@
 """
-GPTMail API client (standalone).
+MoeMail API client (standalone).
 
 Based on: https://www.chatgpt.org.uk/2025/11/gptmailapiapi.html
 
